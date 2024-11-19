@@ -17,18 +17,10 @@ jobs:
       run: |
         mkdir -p website_backup
         wget --recursive --no-clobber --page-requisites --html-extension --convert-links --execute robots=off \
-<<<<<<< HEAD
-      	  --accept js,html,css,png,jpg --directory-prefix=website_backup \
-      	  --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" \
-      	  --tries=3 --wait=5 \
-      	  --verbose https://www.act.org.nz/ || echo "wget failed with exit code $?"
-=======
           --accept js,html,css,png,jpg --directory-prefix=website_backup \
           --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" \
           --tries=3 --wait=5 \
           --verbose https://www.act.org.nz/ || echo "wget failed with exit code $?"
-
->>>>>>> e850605 (Basic script to scrape Act website)
     - name: Commit and push changes
       run: |
         git config user.name "Automated"
