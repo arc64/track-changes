@@ -16,9 +16,11 @@ jobs:
     - name: Fetch entire website with wget
       run: |
         mkdir -p website_backup
-        wget --recursive --no-clobber --page-requisites --html-extension --convert-links \
-          --accept js,html,css,png,jpg --directory-prefix=website_backup https://www.act.org.nz/
-
+        wget --recursive --no-clobber --page-requisites --html-extension --convert-links --execute robots=off \
+      	  --accept js,html,css,png,jpg --directory-prefix=website_backup \
+      	  --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" \
+      	  --tries=3 --wait=5 \
+      	  --verbose https://www.act.org.nz/ || echo "wget failed with exit code $?"
     - name: Commit and push changes
       run: |
         git config user.name "Automated"
