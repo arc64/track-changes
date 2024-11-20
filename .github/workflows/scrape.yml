@@ -1,4 +1,4 @@
-name: Track Entire Website Changes with Puppeteer
+name: Debugging Website Tracking with Puppeteer
 
 on:
   push:
@@ -10,78 +10,71 @@ jobs:
   scheduled:
     runs-on: ubuntu-latest
     steps:
-    - name: Check out this repo
+    - name: Check out repository
       uses: actions/checkout@v4
 
     - name: Set up Node.js
       uses: actions/setup-node@v3
       with:
-        node-version: 23  # Use the latest version of Node.js
+        node-version: 20
 
     - name: Install Puppeteer
-      run: npm install puppeteer
-
-    - name: Fetch website with Puppeteer
       run: |
+        echo "Installing Puppeteer..."
+        npm install puppeteer@latest
+
+    - name: Debug Environment and File System
+      run: |
+        echo "Current directory:"
+        pwd
+        echo "Contents of current directory before running Puppeteer:"
+        ls -la
+        echo "Node.js version:"
+        node -v
+        echo "Installed npm packages:"
+        npm list --depth=0
+
+    - name: Run Puppeteer with Debugging
+      run: |
+        echo "Running Puppeteer script..."
         mkdir -p act.org.nz_site_tracking
-        cat << 'EOF' > fetch-site.js
-        const puppeteer = require('puppeteer');
-        const fs = require('fs');
-        const path = require('path');
+        node fetch-site.mjs || echo "Puppeteer script failed."
+        echo "Contents of act.org.nz_site_tracking after Puppeteer script:"
+        ls -la act.org.nz_site_tracking
 
-        (async () => {
-          const browser = await puppeteer.launch();
-          const page = await browser.newPage();
-
-          try {
-            // Navigate to the website
-            await page.goto('https://www.act.org.nz/', { waitUntil: 'networkidle2' });
-
-            // Save the full page HTML content
-            const htmlContent = await page.content();
-            fs.writeFileSync(path.join('act.org.nz_site_tracking', 'index.html'), htmlContent);
-
-            // Download additional resources (CSS, JS, Images) - optional
-            const urls = await page.evaluate(() =>
-              Array.from(document.querySelectorAll('link[rel="stylesheet"], script[src], img[src]'), (el) => el.href || el.src)
-            );
-
-            for (const url of urls) {
-              try {
-                const response = await page.goto(url);
-                const buffer = await response.buffer();
-                const fileName = url.split('/').pop();
-                const filePath = path.join('act.org.nz_site_tracking', fileName);
-                fs.writeFileSync(filePath, buffer);
-              } catch (err) {
-                console.error(`Failed to download resource: ${url}`, err);
-              }
-            }
-          } catch (err) {
-            console.error('Error fetching the website:', err);
-          } finally {
-            await browser.close();
-          }
-        })();
-        EOF
-
-        # Run the Puppeteer script
-        node fetch-site.js
-
-    - name: Commit and push changes
+    - name: Verify Files Before Commit
       run: |
+        echo "Verifying files exist before staging:"
+        ls -la act.org.nz_site_tracking
+        echo "Checking specific files:"
+        if [ -f "act.org.nz_site_tracking/index.html" ]; then
+          echo "index.html exists"
+        else
+          echo "index.html is missing!"
+        fi
+
+    - name: Commit and Push Changes with Debugging
+      run: |
+        echo "Configuring Git user..."
         git config user.name "Automated"
         git config user.email "actions@users.noreply.github.com"
+
+        echo "Staging files for commit..."
         git add -A
+        echo "Files staged:"
+        git diff --cached --name-only || echo "No files staged."
+
         timestamp=$(date -u)
         
-        # Count the number of files changed
-        file_count=$(git diff --cached --name-only | wc -l)
+        # Commit files
+        echo "Attempting to commit files..."
+        git commit -m "Latest website snapshot: ${timestamp}" || echo "No changes to commit."
         
-        # List the files changed
-        files_changed=$(git diff --cached --name-only | tr '\n' ', ')
-        
-        # Commit with the list of files changed
-        git commit -m "Latest website snapshot: ${timestamp} | Files changed: ${file_count} | Files: ${files_changed}" || exit 0
-        
-        git push
+        # Push changes
+        echo "Attempting to push changes..."
+        git push || echo "Push failed."
+
+    - name: Final Verification
+      run: |
+        echo "Final check of repository directory:"
+        ls -la
