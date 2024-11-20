@@ -18,16 +18,12 @@ jobs:
       with:
         node-version: 20
 
-    - name: Install Puppeteer and Dependencies
+    - name: Install Dependencies
       run: |
-        echo "Installing Puppeteer and downloading Chromium..."
-        npm install puppeteer --force
-
-    - name: Verify Chromium Installation
-      run: |
-        echo "Checking Chromium installation..."
-        which chromium-browser || echo "Chromium not found"
-        chromium-browser --version || echo "Cannot determine Chromium version"
+        echo "Installing Puppeteer and required tools..."
+        sudo apt-get update
+        sudo apt-get install -y xvfb libnss3 libxss1 libasound2 libatk1.0-0 libgtk-3-0
+        npm install puppeteer-extra puppeteer-extra-plugin-stealth proxy-chain --force
 
     # - name: Debug Chromium Path
     #   run: |
@@ -41,33 +37,43 @@ jobs:
         pwd
         ls -la
         cat << 'EOF' > fetch-site.mjs
-        import puppeteer from 'puppeteer';
+        import puppeteer from 'puppeteer-extra';
+        import StealthPlugin from 'puppeteer-extra-plugin-stealth';
         import fs from 'fs';
-        import path from 'path';
+
+        // Apply the stealth plugin
+        puppeteer.use(StealthPlugin());
 
         (async () => {
-          const directory = 'act.org.nz_site_tracking';
+          const baseURL = 'https://www.act.org.nz/';
 
-          // Ensure the directory exists
-          if (!fs.existsSync(directory)) {
-            fs.mkdirSync(directory, { recursive: true });
-            console.log(`Directory created: ${directory}`);
-          }
+          console.log('Launching Puppeteer with Stealth Plugin...');
 
-          console.log('Launching Puppeteer...');
           const browser = await puppeteer.launch({
-            executablePath: '/usr/local/share/chromium/chrome-linux/chrome',
-            headless: true,
+            executablePath: '/usr/bin/chromium-browser', // Path to system-installed Chromium
+            headless: false, // Run in headful mode
+            args: ['--no-sandbox', '--disable-setuid-sandbox'],
           });
           const page = await browser.newPage();
 
           try {
-            console.log('Navigating to https://www.act.org.nz/...');
-            await page.goto('https://www.act.org.nz/', { waitUntil: 'networkidle2' });
-            console.log('Page loaded.');
-            const htmlContent = await page.content();
-            fs.writeFileSync(path.join('act.org.nz_site_tracking', 'index.html'), htmlContent);
-            console.log('Saved index.html.');
+            console.log(`Navigating to ${baseURL}...`);
+            await page.goto(baseURL, { waitUntil: 'networkidle2', timeout: 60000 });
+
+            console.log('Page loaded. Saving Cloudflare response...');
+
+            // Save the entire page content to a local file
+            const content = await page.content();
+            fs.writeFileSync('cloudflare_response.html', content);
+            console.log('Cloudflare response saved to cloudflare_response.html');
+
+            // Optionally, log the page title and headers
+            const title = await page.title();
+            console.log(`Page title: ${title}`);
+
+            const headers = await page.evaluate(() => JSON.stringify(window.performance.getEntriesByType('navigation')[0], null, 2));
+            console.log('Page headers:');
+            console.log(headers);
           } catch (err) {
             console.error('Error during Puppeteer operation:', err);
           } finally {
@@ -75,7 +81,10 @@ jobs:
             await browser.close();
             console.log('Puppeteer closed.');
           }
+
         })();
+
+
         EOF
         echo "fetch-site.mjs created successfully."
 
@@ -94,14 +103,22 @@ jobs:
         echo "Installed npm packages:"
         npm list --depth=0
 
-    - name: Run Puppeteer Script
+    # - name: Run Puppeteer in Headful Mode
+    #   run: |
+    #     echo "Starting Xvfb..."
+    #     Xvfb :99 -ac & # Start Xvfb on display :99
+    #     export DISPLAY=:99 # Set the display environment variable
+    #     echo "Running Puppeteer script..."
+    #     node fetch-site.mjs
+
+    - name: Run Puppeteer with Stealth
       run: |
-        echo "Running fetch-site.mjs..."
-        if [ ! -f fetch-site.mjs ]; then
-          echo "Error: fetch-site.mjs does not exist!" >&2
-          exit 1
-        fi
+        echo "Starting Xvfb..."
+        Xvfb :99 -ac &
+        export DISPLAY=:99
+        echo "Running Puppeteer script..."
         node fetch-site.mjs
+
     - name: Verify Output Files
       run: |
         echo "Checking act.org.nz_site_tracking directory..."
