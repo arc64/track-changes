@@ -24,6 +24,7 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y xvfb libnss3 libxss1 libasound2 libatk1.0-0 libgtk-3-0
         npm install puppeteer-extra puppeteer-extra-plugin-stealth proxy-chain --force
+        npm install cloudflare-scraper
 
     # - name: Debug Chromium Path
     #   run: |
@@ -37,51 +38,39 @@ jobs:
         pwd
         ls -la
         cat << 'EOF' > fetch-site.mjs
-        import puppeteer from 'puppeteer-extra';
-        import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+        import got from 'got';
         import fs from 'fs';
-
-        // Apply the stealth plugin
-        puppeteer.use(StealthPlugin());
+        import path from 'path';
 
         (async () => {
           const baseURL = 'https://www.act.org.nz/';
+          const directory = 'act.org.nz_site_tracking';
 
-          console.log('Launching Puppeteer with Stealth Plugin...');
-
-          const browser = await puppeteer.launch({
-            executablePath: '/usr/bin/chromium-browser', // Path to system-installed Chromium
-            headless: false, // Run in headful mode
-            args: ['--no-sandbox', '--disable-setuid-sandbox'],
-          });
-          const page = await browser.newPage();
-
-          try {
-            console.log(`Navigating to ${baseURL}...`);
-            await page.goto(baseURL, { waitUntil: 'networkidle2', timeout: 60000 });
-
-            console.log('Page loaded. Saving Cloudflare response...');
-
-            // Save the entire page content to a local file
-            const content = await page.content();
-            fs.writeFileSync('cloudflare_response.html', content);
-            console.log('Cloudflare response saved to cloudflare_response.html');
-
-            // Optionally, log the page title and headers
-            const title = await page.title();
-            console.log(`Page title: ${title}`);
-
-            const headers = await page.evaluate(() => JSON.stringify(window.performance.getEntriesByType('navigation')[0], null, 2));
-            console.log('Page headers:');
-            console.log(headers);
-          } catch (err) {
-            console.error('Error during Puppeteer operation:', err);
-          } finally {
-            console.log('Closing Puppeteer...');
-            await browser.close();
-            console.log('Puppeteer closed.');
+          // Ensure the directory exists
+          if (!fs.existsSync(directory)) {
+            fs.mkdirSync(directory, { recursive: true });
+            console.log(`Directory created: ${directory}`);
           }
 
+          try {
+            console.log(`Fetching ${baseURL} using Cloudflare Scraper with increased timeout...`);
+
+            // Fetch the main page with increased timeout
+            const options = {
+              timeout: {
+                send: 3500
+              },
+            };
+
+            const response = await got(baseURL, options);
+
+            // Log the first 500 characters of the response body for debugging
+            console.log('Response Body Preview:', response);
+
+          } catch (err) {
+            // Catch and log any error during the main request
+            console.error('Error during Cloudflare Scraper operation:', err);
+          }
         })();
 
 
