@@ -1,4 +1,4 @@
-name: Track Entire Website Changes with wget
+name: Track Entire Website Changes with Puppeteer
 
 on:
   push:
@@ -12,21 +12,62 @@ jobs:
     steps:
     - name: Check out this repo
       uses: actions/checkout@v4
-    
-    - name: Test network connectivity
-      run: |
-        curl -I https://www.act.org.nz/
-        nslookup www.act.org.nz
-        ping -c 4 www.act.org.nz
 
-    - name: Fetch entire website with wget
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: 16
+
+    - name: Install Puppeteer
+      run: npm install puppeteer
+
+    - name: Fetch website with Puppeteer
       run: |
         mkdir -p act.org.nz_site_tracking
-        wget --recursive --no-clobber --page-requisites --html-extension --convert-links --execute robots=off \
-          --accept js,html,css,png,jpg --directory-prefix=website_backup \
-          --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" \
-          --tries=3 --wait=5 \
-          --verbose https://www.act.org.nz/ || echo "wget failed with exit code $?"
+        cat << 'EOF' > fetch-site.js
+        const puppeteer = require('puppeteer');
+        const fs = require('fs');
+        const path = require('path');
+
+        (async () => {
+          const browser = await puppeteer.launch();
+          const page = await browser.newPage();
+
+          try {
+            // Navigate to the website
+            await page.goto('https://www.act.org.nz/', { waitUntil: 'networkidle2' });
+
+            // Save the full page HTML content
+            const htmlContent = await page.content();
+            fs.writeFileSync(path.join('act.org.nz_site_tracking', 'index.html'), htmlContent);
+
+            // Download additional resources (CSS, JS, Images) - optional
+            const urls = await page.evaluate(() =>
+              Array.from(document.querySelectorAll('link[rel="stylesheet"], script[src], img[src]'), (el) => el.href || el.src)
+            );
+
+            for (const url of urls) {
+              try {
+                const response = await page.goto(url);
+                const buffer = await response.buffer();
+                const fileName = url.split('/').pop();
+                const filePath = path.join('act.org.nz_site_tracking', fileName);
+                fs.writeFileSync(filePath, buffer);
+              } catch (err) {
+                console.error(`Failed to download resource: ${url}`, err);
+              }
+            }
+          } catch (err) {
+            console.error('Error fetching the website:', err);
+          } finally {
+            await browser.close();
+          }
+        })();
+        EOF
+
+        # Run the Puppeteer script
+        node fetch-site.js
+
     - name: Commit and push changes
       run: |
         git config user.name "Automated"
