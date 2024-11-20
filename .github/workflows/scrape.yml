@@ -1,4 +1,4 @@
-name: Debugging Website Tracking with Puppeteer
+name: Debugging Puppeteer Script
 
 on:
   push:
@@ -18,63 +18,87 @@ jobs:
       with:
         node-version: 20
 
-    - name: Install Puppeteer
+    - name: Create fetch-site.mjs
       run: |
-        echo "Installing Puppeteer..."
-        npm install puppeteer@latest
-
-    - name: Debug Environment and File System
-      run: |
-        echo "Current directory:"
+        echo "Creating fetch-site.mjs..."
         pwd
-        echo "Contents of current directory before running Puppeteer:"
         ls -la
+        cat << 'EOF' > fetch-site.mjs
+        import puppeteer from 'puppeteer';
+        import fs from 'fs';
+        import path from 'path';
+
+        (async () => {
+          console.log('Launching Puppeteer...');
+          const browser = await puppeteer.launch();
+          const page = await browser.newPage();
+
+          try {
+            console.log('Navigating to https://www.act.org.nz/...');
+            await page.goto('https://www.act.org.nz/', { waitUntil: 'networkidle2' });
+            console.log('Page loaded.');
+
+            const htmlContent = await page.content();
+            fs.writeFileSync(path.join('act.org.nz_site_tracking', 'index.html'), htmlContent);
+            console.log('Saved index.html.');
+          } catch (err) {
+            console.error('Error during Puppeteer operation:', err);
+          } finally {
+            console.log('Closing Puppeteer...');
+            await browser.close();
+            console.log('Puppeteer closed.');
+          }
+        })();
+        EOF
+        echo "fetch-site.mjs created successfully."
+
+    - name: Verify fetch-site.mjs
+      run: |
+        echo "Verifying fetch-site.mjs exists..."
+        ls -la
+        cat fetch-site.mjs || echo "Error: fetch-site.mjs does not exist!"
+
+    - name: Debug Environment
+      run: |
+        echo "Current working directory:"
+        pwd
         echo "Node.js version:"
         node -v
         echo "Installed npm packages:"
         npm list --depth=0
 
-    - name: Run Puppeteer with Debugging
+    - name: Run Puppeteer Script
       run: |
-        echo "Running Puppeteer script..."
-        mkdir -p act.org.nz_site_tracking
-        node fetch-site.mjs || echo "Puppeteer script failed."
-        echo "Contents of act.org.nz_site_tracking after Puppeteer script:"
-        ls -la act.org.nz_site_tracking
-
-    - name: Verify Files Before Commit
+        echo "Running fetch-site.mjs..."
+        if [ ! -f fetch-site.mjs ]; then
+          echo "Error: fetch-site.mjs does not exist!" >&2
+          exit 1
+        fi
+    node fetch-site.mjs
+    - name: Verify Output Files
       run: |
-        echo "Verifying files exist before staging:"
-        ls -la act.org.nz_site_tracking
-        echo "Checking specific files:"
-        if [ -f "act.org.nz_site_tracking/index.html" ]; then
-          echo "index.html exists"
+        echo "Checking act.org.nz_site_tracking directory..."
+        ls -la act.org.nz_site_tracking || echo "Error: Output directory is missing!"
+        echo "Verifying index.html..."
+        if [ -f act.org.nz_site_tracking/index.html ]; then
+          echo "index.html exists."
         else
-          echo "index.html is missing!"
+          echo "Error: index.html is missing!"
         fi
 
-    - name: Commit and Push Changes with Debugging
+    - name: Commit and Push Changes
       run: |
-        echo "Configuring Git user..."
+        echo "Configuring Git..."
         git config user.name "Automated"
         git config user.email "actions@users.noreply.github.com"
-
-        echo "Staging files for commit..."
+        echo "Staging files..."
         git add -A
-        echo "Files staged:"
-        git diff --cached --name-only || echo "No files staged."
-
-        timestamp=$(date -u)
+        echo "Files staged for commit:"
+        git diff --cached --name-only || echo "Error: No files staged."
         
-        # Commit files
-        echo "Attempting to commit files..."
+        timestamp=$(date -u)
+        echo "Attempting to commit..."
         git commit -m "Latest website snapshot: ${timestamp}" || echo "No changes to commit."
         
-        # Push changes
         echo "Attempting to push changes..."
-        git push || echo "Push failed."
-
-    - name: Final Verification
-      run: |
-        echo "Final check of repository directory:"
-        ls -la
+        git push || echo "Error: Failed to push changes."
