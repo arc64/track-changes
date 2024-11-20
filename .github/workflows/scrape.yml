@@ -18,6 +18,23 @@ jobs:
       with:
         node-version: 20
 
+    - name: Install Puppeteer and Dependencies
+      run: |
+        echo "Installing Puppeteer and downloading Chromium..."
+        npm install puppeteer --force
+
+    - name: Verify Chromium Installation
+      run: |
+        echo "Checking Chromium installation..."
+        which chromium-browser || echo "Chromium not found"
+        chromium-browser --version || echo "Cannot determine Chromium version"
+
+    # - name: Debug Chromium Path
+    #   run: |
+    #     echo "Checking Chromium executable path..."
+    #     ls -la /usr/bin | grep chromium
+    #     ls -la /snap/bin | grep chromium
+
     - name: Create fetch-site.mjs
       run: |
         echo "Creating fetch-site.mjs..."
@@ -29,15 +46,25 @@ jobs:
         import path from 'path';
 
         (async () => {
+          const directory = 'act.org.nz_site_tracking';
+
+          // Ensure the directory exists
+          if (!fs.existsSync(directory)) {
+            fs.mkdirSync(directory, { recursive: true });
+            console.log(`Directory created: ${directory}`);
+          }
+
           console.log('Launching Puppeteer...');
-          const browser = await puppeteer.launch();
+          const browser = await puppeteer.launch({
+            executablePath: '/usr/local/share/chromium/chrome-linux/chrome',
+            headless: true,
+          });
           const page = await browser.newPage();
 
           try {
             console.log('Navigating to https://www.act.org.nz/...');
             await page.goto('https://www.act.org.nz/', { waitUntil: 'networkidle2' });
             console.log('Page loaded.');
-
             const htmlContent = await page.content();
             fs.writeFileSync(path.join('act.org.nz_site_tracking', 'index.html'), htmlContent);
             console.log('Saved index.html.');
@@ -74,7 +101,7 @@ jobs:
           echo "Error: fetch-site.mjs does not exist!" >&2
           exit 1
         fi
-    node fetch-site.mjs
+        node fetch-site.mjs
     - name: Verify Output Files
       run: |
         echo "Checking act.org.nz_site_tracking directory..."
@@ -95,10 +122,8 @@ jobs:
         git add -A
         echo "Files staged for commit:"
         git diff --cached --name-only || echo "Error: No files staged."
-        
         timestamp=$(date -u)
         echo "Attempting to commit..."
         git commit -m "Latest website snapshot: ${timestamp}" || echo "No changes to commit."
-        
         echo "Attempting to push changes..."
         git push || echo "Error: Failed to push changes."
