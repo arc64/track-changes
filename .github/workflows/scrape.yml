@@ -12,6 +12,12 @@ jobs:
     steps:
     - name: Check out this repo
       uses: actions/checkout@v4
+    
+    - name: Test network connectivity
+      run: |
+        curl -I https://www.act.org.nz/
+        nslookup www.act.org.nz
+        ping -c 4 www.act.org.nz
 
     - name: Fetch entire website with wget
       run: |
