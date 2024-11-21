@@ -31,81 +31,111 @@ jobs:
         cat << 'EOF' > fetch-site.mjs
         import puppeteer from 'puppeteer-extra';
         import StealthPlugin from 'puppeteer-extra-plugin-stealth';
-        import AdblockerPlugin from 'puppeteer-extra-plugin-adblocker';
-        import UserAgent from 'user-agents';
         import fs from 'fs';
+        import path from 'path';
 
-        // Use stealth and adblocker plugins to evade detection
         puppeteer.use(StealthPlugin());
-        puppeteer.use(AdblockerPlugin());
+
+        const politicalPartiesNZ = {
+          ParliamentaryParties: [
+            {
+              name: "New Zealand National Party",
+              website: "https://www.national.org.nz"
+            },
+            {
+              name: "New Zealand Labour Party",
+              website: "https://www.labour.org.nz"
+            },
+            {
+              name: "Green Party of Aotearoa New Zealand",
+              website: "https://www.greens.org.nz"
+            },
+            {
+              name: "ACT New Zealand",
+              website: "https://www.act.org.nz"
+            },
+            {
+              name: "New Zealand First Party",
+              website: "https://www.nzfirst.nz"
+            },
+            {
+              name: "Te Pāti Māori",
+              website: "https://www.maoriparty.org.nz"
+            }
+          ],
+          NonParliamentaryRegisteredParties: [
+            {
+              name: "Aotearoa Legalise Cannabis Party",
+              website: "https://www.alcp.org.nz"
+            },
+            {
+              name: "Animal Justice Party Aotearoa New Zealand",
+              website: "https://animaljustice.org.nz"
+            },
+            {
+              name: "Democratic Alliance",
+              website: "https://democraticalliance.nz"
+            },
+            {
+              name: "Freedoms New Zealand",
+              website: "https://www.freedomsnz.org.nz"
+            }
+          ]
+        };
 
         (async () => {
-          const url = 'https://www.act.org.nz/';
-          const outputDir = 'act.org.nz_site_tracking';
+          const directory = 'political_parties_data';
 
-          // Proxy setup (replace with your proxy details)
-          const proxyUrl = `http://54.67.125.45:3128`
-
-          // Generate a random user agent for better evasion
-          const userAgent = new UserAgent();
-
-          // Ensure the output directory exists
-          if (!fs.existsSync(outputDir)) {
-            fs.mkdirSync(outputDir, { recursive: true });
-            console.log(`Directory created: ${outputDir}`);
+          // Ensure the directory exists
+          if (!fs.existsSync(directory)) {
+            fs.mkdirSync(directory, { recursive: true });
+            console.log(`Directory created: ${directory}`);
           }
 
-          try {
-            console.log('Launching browser with anti-bot features...');
-            const browser = await puppeteer.launch({
-              executablePath: '/usr/bin/chromium-browser', // Path to system-installed Chromium
-              headless: true,
-              args: [
-                `--proxy-server=${proxyUrl}`,
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-gpu',
-                '--disable-dev-shm-usage',
-                '--ignore-certificate-errors'
-              ],
-              ignoreHTTPSErrors: true,
-            });
+          console.log('Launching Puppeteer...');
+          const browser = await puppeteer.launch({
+            headless: true,
+            args: ['--no-sandbox', '--disable-setuid-sandbox'],
+          });
 
+          const scrapeWebsite = async (party) => {
             const page = await browser.newPage();
+            console.log(`Scraping ${party.name} (${party.website})...`);
 
-            // Set user-agent and other headers to mimic a real browser
-            await page.setUserAgent(userAgent.toString());
-            console.log(`Using User Agent: ${userAgent.toString()}`);
-
-            // Set additional headers
-            await page.setExtraHTTPHeaders({
-              'Accept-Language': 'en-US,en;q=0.9',
-            });
-
-            console.log(`Navigating to ${url}...`);
-            await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
-
-            // Wait for specific element to ensure the page loaded
-            await page.waitForSelector('body');
-
-            console.log('Page loaded. Taking a snapshot...');
-            const content = await page.content();
-            console.log('Captured Page Content:', content.substring(0, 500)); // Log the first 500 characters
-
-            // Save content to a file
-            const filePath = `${outputDir}/index.html`;
             try {
-              fs.writeFileSync(filePath, content, 'utf-8');
-              console.log(`Snapshot saved to ${filePath}`);
-            } catch (error) {
-              console.error('Error writing file:', error);
-            }
+              // Visit the website
+              await page.goto(party.website, { waitUntil: 'networkidle2', timeout: 60000 });
 
-            await browser.close();
-          } catch (error) {
-            console.error('Error occurred while fetching the page:', error);
+              // Extract page content
+              const htmlContent = await page.content();
+              const fileName = `${party.name.replace(/[^\w.-]+/g, '_')}.html`;
+              const filePath = path.join(directory, fileName);
+
+              // Save the HTML content to a file
+              fs.writeFileSync(filePath, htmlContent);
+              console.log(`Saved content for ${party.name} to ${filePath}`);
+
+            } catch (err) {
+              console.error(`Failed to scrape ${party.website}:`, err.message);
+            } finally {
+              await page.close();
+            }
+          };
+
+          // Loop through all parties
+          for (const category of Object.keys(politicalPartiesNZ)) {
+            const parties = politicalPartiesNZ[category];
+            console.log(`Scraping category: ${category}`);
+            for (const party of parties) {
+              await scrapeWebsite(party);
+            }
           }
+
+          console.log('Closing Puppeteer...');
+          await browser.close();
+          console.log('Puppeteer closed.');
         })();
+
         EOF
         echo "fetch-site.mjs created successfully."
 
@@ -134,11 +164,11 @@ jobs:
 
     - name: Verify Output Files
       run: |
-        echo "Checking act.org.nz_site_tracking directory..."
-        ls -la act.org.nz_site_tracking || echo "Error: Output directory is missing!"
+        echo "Checking political_parties_data directory..."
+        ls -la political_parties_data || echo "Error: Output directory is missing!"
         echo "Verifying index.html..."
-        if [ -f act.org.nz_site_tracking/index.html ]; then
-          echo "index.html exists."
+        if [ -f political_parties_data/*.html ]; then
+          echo ".html exists."
         else
           echo "Error: index.html is missing!"
         fi
@@ -149,7 +179,7 @@ jobs:
         git config user.name "Automated"
         git config user.email "actions@users.noreply.github.com"
         echo "Staging files..."
-        git add act.org.nz_site_tracking
+        git add political_parties_data
         echo "Files staged for commit:"
         git diff --cached --name-only || echo "Error: No files staged."
         timestamp=$(date -u)
