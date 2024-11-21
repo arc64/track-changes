@@ -1,4 +1,4 @@
-name: Debugging Puppeteer Script with Anti-Bot Features
+name: Debugging NoDriver Script with Anti-Bot Features
 
 on:
   push:
@@ -13,164 +13,133 @@ jobs:
     - name: Check out repository
       uses: actions/checkout@v4
 
-    - name: Set up Node.js
-      uses: actions/setup-node@v3
+    - name: Set up Python
+      uses: actions/setup-python@v5
       with:
-        node-version: 20
+        python-version: '3.x'
+
+    - name: Display Python version
+      run: python -c "import sys; print(sys.version)"
+
+    - name: Verify Python Installation
+      run: |
+        echo "Python version:"
+        python --version
+        echo "Python executable path:"
+        which python
 
     - name: Install Dependencies
       run: |
-        echo "Installing Puppeteer and required tools..."
-        sudo apt-get update
-        sudo apt-get install -y xvfb libnss3 libxss1 libasound2 libatk1.0-0 libgtk-3-0
-        npm install puppeteer-extra puppeteer-extra-plugin-stealth puppeteer-extra-plugin-adblocker proxy-chain user-agents --force
+        echo "Installing required tools..."
+        pip install nodriver requests
 
-    - name: Create fetch-site.mjs
+    - name: Create fetch_site.py
       run: |
-        echo "Creating fetch-site.mjs..."
-        cat << 'EOF' > fetch-site.mjs
-        import puppeteer from 'puppeteer-extra';
-        import StealthPlugin from 'puppeteer-extra-plugin-stealth';
-        import fs from 'fs';
-        import path from 'path';
+        echo "Creating fetch_site.py..."
+        cat << 'EOF' > fetch_site.py
+        import os
+        import asyncio
+        import nodriver as uc
 
-        puppeteer.use(StealthPlugin());
+        political_parties_nz = {
+            "ParliamentaryParties": [
+                {"name": "New Zealand National Party", "website": "https://www.national.org.nz"},
+                {"name": "New Zealand Labour Party", "website": "https://www.labour.org.nz"},
+                {"name": "Green Party of Aotearoa New Zealand", "website": "https://www.greens.org.nz"},
+                {"name": "ACT New Zealand", "website": "https://www.act.org.nz"},
+                {"name": "New Zealand First Party", "website": "https://www.nzfirst.nz"},
+                {"name": "Te Pāti Māori", "website": "https://www.maoriparty.org.nz"}
+            ],
+            "NonParliamentaryRegisteredParties": [
+                {"name": "Aotearoa Legalise Cannabis Party", "website": "https://www.alcp.org.nz"},
+                {"name": "Animal Justice Party Aotearoa New Zealand", "website": "https://animaljustice.org.nz"},
+                {"name": "Democratic Alliance", "website": "https://democraticalliance.nz"},
+                {"name": "Freedoms New Zealand", "website": "https://www.freedomsnz.org.nz"}
+            ]
+        }
 
-        const politicalPartiesNZ = {
-          ParliamentaryParties: [
-            {
-              name: "New Zealand National Party",
-              website: "https://www.national.org.nz"
-            },
-            {
-              name: "New Zealand Labour Party",
-              website: "https://www.labour.org.nz"
-            },
-            {
-              name: "Green Party of Aotearoa New Zealand",
-              website: "https://www.greens.org.nz"
-            },
-            {
-              name: "ACT New Zealand",
-              website: "https://www.act.org.nz"
-            },
-            {
-              name: "New Zealand First Party",
-              website: "https://www.nzfirst.nz"
-            },
-            {
-              name: "Te Pāti Māori",
-              website: "https://www.maoriparty.org.nz"
-            }
-          ],
-          NonParliamentaryRegisteredParties: [
-            {
-              name: "Aotearoa Legalise Cannabis Party",
-              website: "https://www.alcp.org.nz"
-            },
-            {
-              name: "Animal Justice Party Aotearoa New Zealand",
-              website: "https://animaljustice.org.nz"
-            },
-            {
-              name: "Democratic Alliance",
-              website: "https://democraticalliance.nz"
-            },
-            {
-              name: "Freedoms New Zealand",
-              website: "https://www.freedomsnz.org.nz"
-            }
-          ]
-        };
+        def save_html_content(directory, party_name, content):
+            sanitized_name = "".join([c if c.isalnum() or c in (' ', '.', '_') else "_" for c in party_name])
+            file_name = f"{sanitized_name}.html"
+            file_path = os.path.join(directory, file_name)
 
-        (async () => {
-          const directory = 'political_parties_data';
+            with open(file_path, "w", encoding="utf-8") as file:
+                file.write(content)
+            print(f"Saved content for {party_name} to {file_path}")
 
-          // Ensure the directory exists
-          if (!fs.existsSync(directory)) {
-            fs.mkdirSync(directory, { recursive: true });
-            console.log(`Directory created: ${directory}`);
-          }
 
-          console.log('Launching Puppeteer...');
-          const browser = await puppeteer.launch({
-            headless: true,
-            args: ['--no-sandbox', '--disable-setuid-sandbox'],
-          });
+        async def scrape_website(driver, party):
+            print(f"Scraping {party['name']} ({party['website']})...")
+            try:
+                await driver.get(party['website'])
+                html_content = await driver.page_source()
+                return html_content
+            except Exception as e:
+                print(f"Failed to scrape {party['website']}: {e}")
+                return None
 
-          const scrapeWebsite = async (party) => {
-            const page = await browser.newPage();
-            console.log(`Scraping ${party.name} (${party.website})...`);
 
-            try {
-              // Visit the website
-              await page.goto(party.website, { waitUntil: 'networkidle2', timeout: 60000 });
+        async def main():
+            directory = "political_parties_data"
 
-              // Extract page content
-              const htmlContent = await page.content();
-              const fileName = `${party.name.replace(/[^\w.-]+/g, '_')}.html`;
-              const filePath = path.join(directory, fileName);
+            browser = await uc.start(headless=True, sandbox=False)
+            page = await browser.get('https://www.nowsecure.nl')
+            html_content = await page.page_source()
+            print(f"test page: {html_content}")
 
-              // Save the HTML content to a file
-              fs.writeFileSync(filePath, htmlContent);
-              console.log(`Saved content for ${party.name} to ${filePath}`);
+            # # Ensure the directory exists
+            # if not os.path.exists(directory):
+            #     os.makedirs(directory)
+            #     print(f"Directory created: {directory}")
 
-            } catch (err) {
-              console.error(`Failed to scrape ${party.website}:`, err.message);
-            } finally {
-              await page.close();
-            }
-          };
+            # driver = await uc.start(no_sandbox=True)
 
-          // Loop through all parties
-          for (const category of Object.keys(politicalPartiesNZ)) {
-            const parties = politicalPartiesNZ[category];
-            console.log(`Scraping category: ${category}`);
-            for (const party of parties) {
-              await scrapeWebsite(party);
-            }
-          }
+            # # Loop through all parties
+            # for category, parties in political_parties_nz.items():
+            #     print(f"Scraping category: {category}")
+            #     for party in parties:
+            #         html_content = await scrape_website(driver, party)
+            #         if html_content:
+            #             save_html_content(directory, party['name'], html_content)
 
-          console.log('Closing Puppeteer...');
-          await browser.close();
-          console.log('Puppeteer closed.');
-        })();
+            # await driver.stop()
+            # print("Scraping completed.")
 
+
+        if __name__ == "__main__":
+            asyncio.run(main())
         EOF
-        echo "fetch-site.mjs created successfully."
+        echo "fetch_site.py created successfully."
 
-    - name: Verify fetch-site.mjs
+    - name: Verify fetch_site.py
       run: |
-        echo "Verifying fetch-site.mjs exists..."
+        echo "Verifying fetch_site.py exists..."
         ls -la
-        cat fetch-site.mjs || echo "Error: fetch-site.mjs does not exist!"
+        cat fetch_site.py || echo "Error: fetch_site.py does not exist!"
 
     - name: Debug Environment
       run: |
         echo "Current working directory:"
         pwd
-        echo "Node.js version:"
-        node -v
-        echo "Installed npm packages:"
-        npm list --depth=0
+        echo "Python version:"
+        python --version
+        echo "Installed Python packages:"
+        pip freeze
 
-    - name: Run Puppeteer with Anti-Bot Features
+    - name: Run NoDriver Script
       run: |
-        echo "Starting Xvfb..."
-        Xvfb :99 -ac &
-        export DISPLAY=:99
-        echo "Running Puppeteer script with stealth features..."
-        node fetch-site.mjs
+        echo "Running NoDriver script with stealth features..."
+        python fetch_site.py
 
     - name: Verify Output Files
       run: |
         echo "Checking political_parties_data directory..."
         ls -la political_parties_data || echo "Error: Output directory is missing!"
-        echo "Verifying index.html..."
-        if [ -f political_parties_data/*.html ]; then
-          echo ".html exists."
+        echo "Verifying .html files..."
+        if ls political_parties_data/*.html 1> /dev/null 2>&1; then
+          echo ".html files exist."
         else
-          echo "Error: index.html is missing!"
+          echo "Error: No HTML files generated!"
         fi
 
     - name: Commit and Push Changes
