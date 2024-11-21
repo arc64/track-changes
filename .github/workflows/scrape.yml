@@ -1,4 +1,4 @@
-name: Debugging Puppeteer Script
+name: Debugging Puppeteer Script with Anti-Bot Features
 
 on:
   push:
@@ -23,57 +23,89 @@ jobs:
         echo "Installing Puppeteer and required tools..."
         sudo apt-get update
         sudo apt-get install -y xvfb libnss3 libxss1 libasound2 libatk1.0-0 libgtk-3-0
-        npm install puppeteer-extra puppeteer-extra-plugin-stealth proxy-chain --force
-        npm install cloudflare-scraper
-
-    # - name: Debug Chromium Path
-    #   run: |
-    #     echo "Checking Chromium executable path..."
-    #     ls -la /usr/bin | grep chromium
-    #     ls -la /snap/bin | grep chromium
+        npm install puppeteer-extra puppeteer-extra-plugin-stealth puppeteer-extra-plugin-adblocker proxy-chain user-agents --force
 
     - name: Create fetch-site.mjs
       run: |
         echo "Creating fetch-site.mjs..."
-        pwd
-        ls -la
         cat << 'EOF' > fetch-site.mjs
-        import got from 'got';
+        import puppeteer from 'puppeteer-extra';
+        import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+        import AdblockerPlugin from 'puppeteer-extra-plugin-adblocker';
+        import UserAgent from 'user-agents';
         import fs from 'fs';
-        import path from 'path';
+
+        // Use stealth and adblocker plugins to evade detection
+        puppeteer.use(StealthPlugin());
+        puppeteer.use(AdblockerPlugin());
 
         (async () => {
-          const baseURL = 'https://www.act.org.nz/';
-          const directory = 'act.org.nz_site_tracking';
+          const url = 'https://www.act.org.nz/';
+          const outputDir = 'act.org.nz_site_tracking';
 
-          // Ensure the directory exists
-          if (!fs.existsSync(directory)) {
-            fs.mkdirSync(directory, { recursive: true });
-            console.log(`Directory created: ${directory}`);
+          // Proxy setup (replace with your proxy details)
+          const proxyUrl = `http://54.67.125.45:3128`
+
+          // Generate a random user agent for better evasion
+          const userAgent = new UserAgent();
+
+          // Ensure the output directory exists
+          if (!fs.existsSync(outputDir)) {
+            fs.mkdirSync(outputDir, { recursive: true });
+            console.log(`Directory created: ${outputDir}`);
           }
 
           try {
-            console.log(`Fetching ${baseURL} using Cloudflare Scraper with increased timeout...`);
+            console.log('Launching browser with anti-bot features...');
+            const browser = await puppeteer.launch({
+              executablePath: '/usr/bin/chromium-browser', // Path to system-installed Chromium
+              headless: true,
+              args: [
+                `--proxy-server=${proxyUrl}`,
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-gpu',
+                '--disable-dev-shm-usage',
+                '--ignore-certificate-errors'
+              ],
+              ignoreHTTPSErrors: true,
+            });
 
-            // Fetch the main page with increased timeout
-            const options = {
-              timeout: {
-                send: 3500
-              },
-            };
+            const page = await browser.newPage();
 
-            const response = await got(baseURL, options);
+            // Set user-agent and other headers to mimic a real browser
+            await page.setUserAgent(userAgent.toString());
+            console.log(`Using User Agent: ${userAgent.toString()}`);
 
-            // Log the first 500 characters of the response body for debugging
-            console.log('Response Body Preview:', response);
+            // Set additional headers
+            await page.setExtraHTTPHeaders({
+              'Accept-Language': 'en-US,en;q=0.9',
+            });
 
-          } catch (err) {
-            // Catch and log any error during the main request
-            console.error('Error during Cloudflare Scraper operation:', err);
+            console.log(`Navigating to ${url}...`);
+            await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
+
+            // Wait for specific element to ensure the page loaded
+            await page.waitForSelector('body');
+
+            console.log('Page loaded. Taking a snapshot...');
+            const content = await page.content();
+            console.log('Captured Page Content:', content.substring(0, 500)); // Log the first 500 characters
+
+            // Save content to a file
+            const filePath = `${outputDir}/index.html`;
+            try {
+              fs.writeFileSync(filePath, content, 'utf-8');
+              console.log(`Snapshot saved to ${filePath}`);
+            } catch (error) {
+              console.error('Error writing file:', error);
+            }
+
+            await browser.close();
+          } catch (error) {
+            console.error('Error occurred while fetching the page:', error);
           }
         })();
-
-
         EOF
         echo "fetch-site.mjs created successfully."
 
@@ -92,20 +124,12 @@ jobs:
         echo "Installed npm packages:"
         npm list --depth=0
 
-    # - name: Run Puppeteer in Headful Mode
-    #   run: |
-    #     echo "Starting Xvfb..."
-    #     Xvfb :99 -ac & # Start Xvfb on display :99
-    #     export DISPLAY=:99 # Set the display environment variable
-    #     echo "Running Puppeteer script..."
-    #     node fetch-site.mjs
-
-    - name: Run Puppeteer with Stealth
+    - name: Run Puppeteer with Anti-Bot Features
       run: |
         echo "Starting Xvfb..."
         Xvfb :99 -ac &
         export DISPLAY=:99
-        echo "Running Puppeteer script..."
+        echo "Running Puppeteer script with stealth features..."
         node fetch-site.mjs
 
     - name: Verify Output Files
@@ -125,7 +149,7 @@ jobs:
         git config user.name "Automated"
         git config user.email "actions@users.noreply.github.com"
         echo "Staging files..."
-        git add -A
+        git add act.org.nz_site_tracking
         echo "Files staged for commit:"
         git diff --cached --name-only || echo "Error: No files staged."
         timestamp=$(date -u)
