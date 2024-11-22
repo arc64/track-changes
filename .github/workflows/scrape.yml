@@ -1,158 +1,138 @@
-name: Debugging NoDriver Script with Anti-Bot Features
+# name: Debugging Ulixee Hero Script with Anti-Bot Features
 
-on:
-  push:
-  workflow_dispatch:
-  schedule:
-    - cron: '6,26,46 * * * *'
+# on:
+#   push:
+#   workflow_dispatch:
+#   schedule:
+#     - cron: '6,26,46 * * * *'
 
-jobs:
-  scheduled:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Check out repository
-      uses: actions/checkout@v4
+# jobs:
+#   scheduled:
+#     runs-on: ubuntu-latest
+#     steps:
+#     - name: Check out repository
+#       uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.x'
+#     - name: Set up Node.js
+#       uses: actions/setup-node@v3
+#       with:
+#         node-version: 18
 
-    - name: Display Python version
-      run: python -c "import sys; print(sys.version)"
+#     - name: Install Dependencies
+#       run: |
+#         echo "Installing Ulixee Hero..."
+#         npm install @ulixee/hero
 
-    - name: Verify Python Installation
-      run: |
-        echo "Python version:"
-        python --version
-        echo "Python executable path:"
-        which python
+#     - name: Create fetch_site.js
+#       run: |
+#         echo "Creating fetch_site.js..."
+#         cat << 'EOF' > fetch_site.js
+#         const Hero = require('@ulixee/hero');
+#         const fs = require('fs');
+#         const path = require('path');
 
-    - name: Install Dependencies
-      run: |
-        echo "Installing required tools..."
-        pip install nodriver requests
+#         const politicalPartiesNZ = {
+#           ParliamentaryParties: [
+#             { name: "New Zealand National Party", website: "https://www.national.org.nz" },
+#             { name: "New Zealand Labour Party", website: "https://www.labour.org.nz" },
+#             { name: "Green Party of Aotearoa New Zealand", website: "https://www.greens.org.nz" },
+#             { name: "ACT New Zealand", website: "https://www.act.org.nz" },
+#             { name: "New Zealand First Party", website: "https://www.nzfirst.nz" },
+#             { name: "Te Pāti Māori", website: "https://www.maoriparty.org.nz" }
+#           ],
+#           NonParliamentaryRegisteredParties: [
+#             { name: "Aotearoa Legalise Cannabis Party", website: "https://www.alcp.org.nz" },
+#             { name: "Animal Justice Party Aotearoa New Zealand", website: "https://animaljustice.org.nz" },
+#             { name: "Democratic Alliance", website: "https://democraticalliance.nz" },
+#             { name: "Freedoms New Zealand", website: "https://www.freedomsnz.org.nz" }
+#           ]
+#         };
 
-    - name: Create fetch_site.py
-      run: |
-        echo "Creating fetch_site.py..."
-        cat << 'EOF' > fetch_site.py
-        import os
-        import asyncio
-        import nodriver as uc
+#         function saveHtmlContent(directory, partyName, content) {
+#           const sanitizedName = partyName.replace(/[^a-zA-Z0-9]/g, '_');
+#           const fileName = `${sanitizedName}.html`;
+#           const filePath = path.join(directory, fileName);
 
-        political_parties_nz = {
-            "ParliamentaryParties": [
-                {"name": "New Zealand National Party", "website": "https://www.national.org.nz"},
-                {"name": "New Zealand Labour Party", "website": "https://www.labour.org.nz"},
-                {"name": "Green Party of Aotearoa New Zealand", "website": "https://www.greens.org.nz"},
-                {"name": "ACT New Zealand", "website": "https://www.act.org.nz"},
-                {"name": "New Zealand First Party", "website": "https://www.nzfirst.nz"},
-                {"name": "Te Pāti Māori", "website": "https://www.maoriparty.org.nz"}
-            ],
-            "NonParliamentaryRegisteredParties": [
-                {"name": "Aotearoa Legalise Cannabis Party", "website": "https://www.alcp.org.nz"},
-                {"name": "Animal Justice Party Aotearoa New Zealand", "website": "https://animaljustice.org.nz"},
-                {"name": "Democratic Alliance", "website": "https://democraticalliance.nz"},
-                {"name": "Freedoms New Zealand", "website": "https://www.freedomsnz.org.nz"}
-            ]
-        }
+#           fs.writeFileSync(filePath, content, 'utf8');
+#           console.log(`Saved content for ${partyName} to ${filePath}`);
+#         }
 
-        def save_html_content(directory, party_name, content):
-            sanitized_name = "".join([c if c.isalnum() or c in (' ', '.', '_') else "_" for c in party_name])
-            file_name = f"{sanitized_name}.html"
-            file_path = os.path.join(directory, file_name)
+#         async function scrapeWebsite(hero, party) {
+#           console.log(`Scraping ${party.name} (${party.website})...`);
+#           try {
+#             await hero.goto(party.website);
+#             const htmlContent = await hero.document.documentElement.outerHTML;
+#             return htmlContent;
+#           } catch (err) {
+#             console.error(`Failed to scrape ${party.website}:`, err);
+#             return null;
+#           }
+#         }
 
-            with open(file_path, "w", encoding="utf-8") as file:
-                file.write(content)
-            print(f"Saved content for {party_name} to {file_path}")
+#         async function main() {
+#           const directory = 'political_parties_data';
 
+#           if (!fs.existsSync(directory)) {
+#             fs.mkdirSync(directory, { recursive: true });
+#             console.log(`Directory created: ${directory}`);
+#           }
 
-        async def scrape_website(driver, party):
-            print(f"Scraping {party['name']} ({party['website']})...")
-            try:
-                await driver.get(party['website'])
-                html_content = await driver.page_source()
-                return html_content
-            except Exception as e:
-                print(f"Failed to scrape {party['website']}: {e}")
-                return None
+#           const hero = new Hero();
 
+#           for (const [category, parties] of Object.entries(politicalPartiesNZ)) {
+#             console.log(`Scraping category: ${category}`);
+#             for (const party of parties) {
+#               const htmlContent = await scrapeWebsite(hero, party);
+#               if (htmlContent) {
+#                 saveHtmlContent(directory, party.name, htmlContent);
+#               }
+#             }
+#           }
 
-        async def main():
-            directory = "political_parties_data"
+#           await hero.close();
+#           console.log('Scraping completed.');
+#         }
 
-            browser = await uc.start(headless=True, sandbox=False)
-            page = await browser.get('https://www.nowsecure.nl')
-            html_content = await page.page_source()
-            print(f"test page: {html_content}")
+#         main().catch(err => {
+#           console.error('An error occurred during scraping:', err);
+#           process.exit(1);
+#         });
+#         EOF
+#         echo "fetch_site.js created successfully."
 
-            # # Ensure the directory exists
-            # if not os.path.exists(directory):
-            #     os.makedirs(directory)
-            #     print(f"Directory created: {directory}")
+#     - name: Verify fetch_site.js
+#       run: |
+#         echo "Verifying fetch_site.js exists..."
+#         ls -la
+#         cat fetch_site.js || echo "Error: fetch_site.js does not exist!"
 
-            # driver = await uc.start(no_sandbox=True)
+#     - name: Run Ulixee Hero Script
+#       run: |
+#         echo "Running Ulixee Hero script..."
+#         node fetch_site.js
 
-            # # Loop through all parties
-            # for category, parties in political_parties_nz.items():
-            #     print(f"Scraping category: {category}")
-            #     for party in parties:
-            #         html_content = await scrape_website(driver, party)
-            #         if html_content:
-            #             save_html_content(directory, party['name'], html_content)
+#     - name: Verify Output Files
+#       run: |
+#         echo "Checking political_parties_data directory..."
+#         ls -la political_parties_data || echo "Error: Output directory is missing!"
+#         echo "Verifying .html files..."
+#         if ls political_parties_data/*.html 1> /dev/null 2>&1; then
+#           echo ".html files exist."
+#         else
+#           echo "Error: No HTML files generated!"
+#         fi
 
-            # await driver.stop()
-            # print("Scraping completed.")
-
-
-        if __name__ == "__main__":
-            asyncio.run(main())
-        EOF
-        echo "fetch_site.py created successfully."
-
-    - name: Verify fetch_site.py
-      run: |
-        echo "Verifying fetch_site.py exists..."
-        ls -la
-        cat fetch_site.py || echo "Error: fetch_site.py does not exist!"
-
-    - name: Debug Environment
-      run: |
-        echo "Current working directory:"
-        pwd
-        echo "Python version:"
-        python --version
-        echo "Installed Python packages:"
-        pip freeze
-
-    - name: Run NoDriver Script
-      run: |
-        echo "Running NoDriver script with stealth features..."
-        python fetch_site.py
-
-    - name: Verify Output Files
-      run: |
-        echo "Checking political_parties_data directory..."
-        ls -la political_parties_data || echo "Error: Output directory is missing!"
-        echo "Verifying .html files..."
-        if ls political_parties_data/*.html 1> /dev/null 2>&1; then
-          echo ".html files exist."
-        else
-          echo "Error: No HTML files generated!"
-        fi
-
-    - name: Commit and Push Changes
-      run: |
-        echo "Configuring Git..."
-        git config user.name "Automated"
-        git config user.email "actions@users.noreply.github.com"
-        echo "Staging files..."
-        git add political_parties_data
-        echo "Files staged for commit:"
-        git diff --cached --name-only || echo "Error: No files staged."
-        timestamp=$(date -u)
-        echo "Attempting to commit..."
-        git commit -m "Latest website snapshot: ${timestamp}" || echo "No changes to commit."
-        echo "Attempting to push changes..."
-        git push || echo "Error: Failed to push changes."
+#     - name: Commit and Push Changes
+#       run: |
+#         echo "Configuring Git..."
+#         git config user.name "Automated"
+#         git config user.email "actions@users.noreply.github.com"
+#         echo "Staging files..."
+#         git add political_parties_data
+#         echo "Files staged for commit:"
+#         git diff --cached --name-only || echo "Error: No files staged."
+#         timestamp=$(date -u)
+#         echo "Attempting to commit..."
+#         git commit -m "Latest website snapshot: ${timestamp}" || echo "No changes to commit."
+#         echo "Attempting to push changes..."
+#         git push || echo "Error: Failed to push changes."
